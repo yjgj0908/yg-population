@@ -1,4 +1,3 @@
-
 import re
 import streamlit as st
 import pandas as pd
@@ -213,7 +212,7 @@ with col3:
     selected_dong = st.selectbox("③ 동", dong_list)
 
 # ==================================================
-# 6. 선택한 지역의 인구 추출
+# 6. 선택한 지역의 인구 추출 및 통계 계산
 # ==================================================
 selected_df = df_latest[
     (df_latest["시도"] == selected_sido)
@@ -247,17 +246,42 @@ total_male = int(male_population.sum())
 total_female = int(female_population.sum())
 total_population = total_male + total_female
 
+# 연령 수치 배열 (0~100)
+age_numbers = np.arange(101)
+total_age_by_group = male_population + female_population
+
+# 평균 연령 계산
+total_age_sum = np.sum(total_age_by_group * age_numbers)
+avg_age = total_age_sum / total_population if total_population > 0 else 0.0
+
+# 유소년 인구 (0~14세), 고령 인구 (65세 이상)
+youth_pop = np.sum(total_age_by_group[:15])
+elderly_pop = np.sum(total_age_by_group[65:])
+
+aging_rate = (elderly_pop / total_population * 100) if total_population > 0 else 0.0
+youth_rate = (youth_pop / total_population * 100) if total_population > 0 else 0.0
+
 # ==================================================
-# 7. 인구 요약
+# 7. 인구 요약 지표 카드
 # ==================================================
 st.divider()
 st.subheader(f"📊 {selected_sido} {selected_sigung} {selected_dong}")
 st.caption(f"기준 연도: {latest_year}년")
 
 m1, m2, m3 = st.columns(3)
-m1.metric("전체 인구", f"{total_population:,}명")
-m2.metric("남자 인구", f"{total_male:,}명")
-m3.metric("여자 인구", f"{total_female:,}명")
+m1.metric("총인구", f"{total_population:,}명")
+m2.metric("평균연령", f"{avg_age:.1f}세")
+
+# 고령화율 20% 이상 시 주의 표시
+if aging_rate >= 20.0:
+    m3.metric(
+        "고령화율 (65세 이상)", 
+        f"{aging_rate:.1f}%", 
+        delta="⚠️ 초고령사회 (20% 이상)", 
+        delta_color="inverse"
+    )
+else:
+    m3.metric("고령화율 (65세 이상)", f"{aging_rate:.1f}%")
 
 # ==================================================
 # 8. 인구 피라미드 그래프
@@ -345,7 +369,6 @@ fig.update_layout(
         tickmode="array",
         tickvals=ages,
         ticktext=ages,
-        # 명시적으로 전체 축을 반전하지 않음
         autorange=True
     ),
     margin=dict(l=85, r=40, t=100, b=70)
@@ -354,7 +377,19 @@ fig.update_layout(
 st.plotly_chart(fig, use_container_width=True)
 
 # ==================================================
-# 9. 그래프 설명
+# 9. 동네 특성 한 줄 설명 (자동 판별)
+# ==================================================
+if youth_rate > aging_rate:
+    summary_text = f"💡 **이 동네는 아이가 상대적으로 많은 편입니다.** (유소년 비율: {youth_rate:.1f}%, 고령자 비율: {aging_rate:.1f}%)"
+elif aging_rate > youth_rate:
+    summary_text = f"💡 **이 동네는 어르신이 상대적으로 많은 편입니다.** (고령자 비율: {aging_rate:.1f}%, 유소년 비율: {youth_rate:.1f}%)"
+else:
+    summary_text = f"💡 **이 동네는 유소년(15세 미만)과 어르신(65세 이상) 비율이 비슷한 편입니다.** (각각 {aging_rate:.1f}%)"
+
+st.info(summary_text)
+
+# ==================================================
+# 10. 그래프 설명
 # ==================================================
 with st.expander("💡 인구 피라미드 읽는 법"):
     st.markdown("""
@@ -366,7 +401,7 @@ with st.expander("💡 인구 피라미드 읽는 법"):
     """)
 
 # ==================================================
-# 10. 연령별 인구표
+# 11. 연령별 인구표
 # ==================================================
 with st.expander("📋 선택한 지역의 연령별 인구표"):
     population_table = pd.DataFrame({
